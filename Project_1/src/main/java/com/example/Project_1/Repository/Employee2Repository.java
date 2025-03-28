@@ -11,4 +11,5 @@ import java.util.Optional;
 public interface Employee2Repository extends JpaRepository<Employee2,Integer> {
     Employee2 findByUsername (String username);
     List<Employee2> findByUsernameContaining(String keyword);
+    boolean existsByRole (Role role);
 }
