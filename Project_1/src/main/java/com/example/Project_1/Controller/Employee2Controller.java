@@ -44,34 +44,41 @@ public class Employee2Controller {
         return employee2Services.GetById(id).orElseThrow();
     }
 
-    @PostMapping("/register")
-    public ResponseEntity<Employee2> register(@RequestBody Employee2 employee,
-                                              @RequestParam(required = false, defaultValue = "USER") String role) {
-        return ResponseEntity.ok(employee2Services.register(employee, role));
+   @PostMapping("/register")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<Employee2> register(
+            @RequestBody Employee2 employee,
+            @RequestParam(required = false, defaultValue = "USER") String role,
+            Authentication authentication) {
+        log.info("Register API called by: {}", authentication.getName());
+        return ResponseEntity.ok(employee2Services.register(employee, role, authentication));
     }
 
-    @PutMapping("/{id}")
-    public Employee2 Update(@PathVariable Integer id, @RequestBody Employee2 employee2){
-        return employee2Services.UpdateE(id, employee2);
+   @PutMapping("/{id}")
+    public ResponseEntity<Employee2> Update(@PathVariable Integer id,
+                                    @RequestBody Employee2 employee2,
+                                    @RequestParam(required = false, defaultValue = "USER") String role,
+                                    Authentication authentication) {
+        log.info("Update API called by.: {}", authentication.getName());
+        return ResponseEntity.ok(employee2Services.UpdateE(id,employee2, role, authentication));
     }
+  @DeleteMapping("/{id}")
+    public ResponseEntity<?> delete(@PathVariable Integer id,@RequestHeader("Authorization") String token){
+        if (token == null || !token.startsWith("Bearer ")) {
+            log.warn("Unauthorized access attempt!!");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized: Please log in.");
+        }
+        token = token.substring(7);
+        List<String> roles = jwtServices.extraRole(token);
+        log.info("Extracted roles from token: {}", roles);
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Integer id){
-        employee2Services.Delete(id);
+        if (!roles.contains("SUPER_ADMIN")) {
+            log.warn("Access Denied: Only Super-Admin can delete Admin and users..");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access Denied: Only Super-Admin can delete Admin and Users..");
+        }
+        employee2Services.Delete(id,"SUPER_ADMIN");
         return ResponseEntity.noContent().build();
     }
-
-/// Admin
-//    @PostMapping("/register-admin")
-//    public ResponseEntity<?> registerAdmin(@RequestBody Employee2 employee2) {
-//
-//        try {
-//            Employee2 registeredAdmin = employee2Services.register(employee2);
-//            return ResponseEntity.ok(registeredAdmin);
-//        } catch (RuntimeException e) {
-//            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-//        }
-//    }
 
 /// Search
     @GetMapping("/search")
