@@ -1,5 +1,6 @@
 package com.example.Project_1.Services;
 
+import com.example.Project_1.Model.Role;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -9,11 +10,9 @@ import org.springframework.stereotype.Service;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class JWTServices {
@@ -35,17 +34,15 @@ public class JWTServices {
         }
     }
 
-    public String generateToken( String username){
-
+    public String generateToken(String username , Role role){
         Map<String ,Object> obj = new HashMap<>();
+        obj.put("role",role.name());
 
         return Jwts.builder()
-                .claims()
-                .add(obj)
+                .claims(obj)
                 .subject(username)
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis()+1000*60*60))
-                .and()
                 .signWith(getKey())
                 .compact();
     }
@@ -54,16 +51,54 @@ public class JWTServices {
         return Second(token, Claims::getSubject);
     }
 
+    public List<String> extraRole(String token) {
+
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(getKey())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+
+            System.out.println("JWT Claims: " + claims);
+
+            Object roleObject = claims.get("role");
+
+            if (roleObject == null) {
+                throw new IllegalArgumentException("Role not found in JWT token");
+            }
+
+            if (roleObject instanceof String string) {
+                return Collections.singletonList(string);
+            } else if (roleObject instanceof List<?> roleList) {
+                return roleList.stream()
+                        .filter(obj -> obj instanceof String)
+                        .map(obj -> (String) obj)
+                        .collect(Collectors.toList());
+            }else if(roleObject instanceof Map<?,?>rolMap){
+                Object authority= rolMap.get("authority");
+                if (authority instanceof String){
+                    return Collections.singletonList((String) authority);
+                }
+            }
+            throw new IllegalArgumentException("Unexpected role format in JWT token");
+
+        } catch (Exception e) {
+            System.err.println("Error extracting role: " + e.getMessage());
+            return Collections.emptyList();
+        }
+    }
     private <T> T Second(String token, Function<Claims,T> function){
-        final Claims claims = Third(token);
+        final Claims claims = Three(token);
         return function.apply(claims);
     }
 
-    private Claims Third(String token){
+    private Claims Three (String token){
         return Jwts.parser()
                 .verifyWith(getKey())
                 .build()
-                .parseSignedClaims(token).getPayload();
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     public boolean validateToken(String token, UserDetails userDetails){
@@ -78,5 +113,5 @@ public class JWTServices {
     private Date Five(String token){
         return Second(token,Claims::getExpiration);
     }
-    
+
 }
