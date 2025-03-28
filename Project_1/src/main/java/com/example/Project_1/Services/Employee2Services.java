@@ -97,8 +97,7 @@ public class Employee2Services implements UserDetailsService {
     public Employee2 register( Employee2 employee2,String role){
         log.info("Creating Employee with username: {}",employee2.getUsername());
 
-        Optional<Employee2> employee3 = Optional.ofNullable(employee2Repository.findByUsername(employee2.getUsername()));
-        if (employee3.isPresent()){
+        if (employee2Repository.findByUsername(employee2.getUsername()) != null) {
             throw new RuntimeException("Username already exists. Please choose a different username.");
         }
         if (employee2.getEmail()==null || employee2.getEmail().isEmpty()){
@@ -108,23 +107,68 @@ public class Employee2Services implements UserDetailsService {
             throw new RuntimeException("Email must be a valid Gmail address (e.g., example@gmail.com)");
         }
 
-        employee2.setRole("Admin".equalsIgnoreCase(role) ? ADMIN : USER);
+        String currentUserRole = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .findFirst()
+                .orElse("");
+
+        if ("ADMIN".equals(currentUserRole) && "ADMIN".equalsIgnoreCase(role)) {
+            throw new RuntimeException("Admins are NOT allowed to create Admin accounts.");
+        }
+        if (!"SUPER_ADMIN".equals(currentUserRole) && "SUPER_ADMIN".equalsIgnoreCase(role)) {
+            throw new RuntimeException("Only a Super-Admin can create another Super-Admin.");
+        }
+
+        if ("SUPER_ADMIN".equals(currentUserRole)) {
+            if (!"ADMIN".equalsIgnoreCase(role) && !"USER".equalsIgnoreCase(role)) {
+                throw new RuntimeException("Super-Admin can only create Admins or Users.");
+            }
+        }
+        if ("ADMIN".equals(currentUserRole) && !"USER".equalsIgnoreCase(role)) {
+            throw new RuntimeException("Admins can only create Users.");
+        }
+
+        employee2.setRole(Role.valueOf(role.toUpperCase()));
         employee2.setPassword(encoder.encode(employee2.getPassword()));
         return employee2Repository.save(employee2);
     }
+    
+     public Employee2 UpdateE(Integer id,Employee2 employee2, String role,Authentication authentication) {
+        log.info("Creating Employee with username.: {}",employee2.getUsername());
 
-    public Employee2 UpdateE(Integer id, Employee2 employee2){
-        log.info(" Update Username and Password :{}",id);
-        Employee2 employee3 = GetById(id).orElseThrow();
-        employee3.setPassword(encoder.encode(employee2.getPassword()));
+        String currentUserRole = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .findFirst()
+                .orElse("");
+
+        if ("ADMIN".equals(currentUserRole) && "ADMIN".equalsIgnoreCase(role)) {
+            throw new RuntimeException("Admins are NOT allowed to Update Admin accounts.");
+        }
+        if (!"SUPER_ADMIN".equals(currentUserRole) && "SUPER_ADMIN".equalsIgnoreCase(role)) {
+            throw new RuntimeException("Only a Super-Admin can Update another Super-Admin.");
+        }
+        if ("SUPER_ADMIN".equals(currentUserRole) && !"ADMIN".equalsIgnoreCase(role) && !"USER".equalsIgnoreCase(role)) {
+                throw new RuntimeException("Super-Admin can only Update Admins or Users.");
+        }
+
+        if ("ADMIN".equals(currentUserRole) && !"USER".equalsIgnoreCase(role)) {
+            throw new RuntimeException("Admins can only Update Users.");
+        }
+        Employee2 employee3 = GetById(id).orElseThrow(()->new RuntimeException("Employee Not Found With ID :" + id ));
+
+        employee3.setRole(Role.valueOf(role.toUpperCase()));
         employee3.setUsername(employee2.getUsername());
         employee3.setEmail(employee2.getEmail());
+        employee3.setPassword(encoder.encode(employee2.getPassword()));
         return employee2Repository.save(employee3);
     }
+     public void Delete(Integer id,String currentUserRole){
 
-    public void Delete(Integer id){
-        if (employee2Repository.existsById(id)){
-            log.error(" Id Was Exist In Db :{}",id);
+        if (!"SUPER_ADMIN".equalsIgnoreCase(currentUserRole)) {
+            throw new RuntimeException("Access Denied: Only Super-Admin can delete admins and users.");
+        }
+        if (employee2Repository.existsById(id)) {
+            log.warn("ID exists in DB: {}", id);
         }
         employee2Repository.deleteById(id);
         log.warn("Delete SuccessFully :{}",id);
